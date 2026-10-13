@@ -31,7 +31,9 @@
     <header class="topbar">
       <div class="mobile-brand">✚ CarePoint</div>
       <div class="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div>
-      <div class="topbar-right"><span class="online-dot"></span> System ready <div class="avatar">CP</div></div>
+      <div class="topbar-right"><span class="online-dot"></span> {{ session.get('user_name', 'User') }}
+        <form action="{{ url_for('logout') }}" method="post" class="logout-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="button secondary logout-button" type="submit">Log out</button></form>
+        <div class="avatar">{{ session.get('user_name', 'U')[:1]|upper }}</div></div>
     </header>
 
     <section class="page-heading" id="overview">
@@ -97,6 +99,7 @@
               <td>{{ patient.created_at }}</td>
               <td><div class="actions"><a class="action-link" href="{{ url_for('dashboard', edit=patient.id) }}#patient-form" title="Edit patient">Edit</a>
                 <form action="{{ url_for('delete_patient', patient_id=patient.id) }}" method="post" class="inline-form delete-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="action-link danger-link" type="submit">Delete</button>
                 </form></div></td>
             </tr>
@@ -114,6 +117,7 @@
         {% if edit_patient %}<a class="button secondary" href="{{ url_for('dashboard') }}#patient-form">Cancel edit</a>{% endif %}
       </div>
       <form action="{{ url_for('save_patient') }}" method="post" class="form-grid">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="patient_id" value="{{ edit_patient.id if edit_patient else '' }}">
         <label>Full name *<input name="full_name" required maxlength="100" placeholder="e.g. Arun Kumar" value="{{ edit_patient.full_name if edit_patient else '' }}"></label>
         <label>Age *<input name="age" type="number" min="0" max="120" required placeholder="e.g. 28" value="{{ edit_patient.age if edit_patient else '' }}"></label>
@@ -137,6 +141,7 @@
         <div class="panel-heading"><div><div class="eyebrow">CLINICAL NOTES</div><h2>Prescriptions</h2><p>Record demo prescription details.</p></div></div>
         {% if patient_options %}
         <form action="{{ url_for('add_prescription') }}" method="post" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label>Patient *
             <select name="patient_id" required><option value="">Choose patient</option>{% for p in patient_options %}<option value="{{ p.id }}">{{ p.full_name }}</option>{% endfor %}</select>
           </label>
@@ -157,6 +162,7 @@
         <div class="panel-heading"><div><div class="eyebrow">PAYMENTS</div><h2>Billing</h2><p>Create bills and track status.</p></div></div>
         {% if patient_options %}
         <form action="{{ url_for('add_bill') }}" method="post" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <label>Patient *
             <select name="patient_id" required><option value="">Choose patient</option>{% for p in patient_options %}<option value="{{ p.id }}">{{ p.full_name }}</option>{% endfor %}</select>
           </label>
@@ -170,6 +176,7 @@
           {% for bill in bills %}
           <div class="mini-item"><div class="mini-icon amber">₹</div><div class="mini-body"><strong>{{ bill.patient_name }} <span class="bill-amount">₹{{ '%.2f'|format(bill.amount) }}</span></strong><p>{{ bill.description }}</p><small>{{ bill.created_at }}</small>
             <form action="{{ url_for('update_bill_status', bill_id=bill.id) }}" method="post" class="status-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <select name="payment_status" aria-label="Payment status" onchange="this.form.submit()">
                 <option value="Pending" {% if bill.payment_status == 'Pending' %}selected{% endif %}>Pending</option>
                 <option value="Paid" {% if bill.payment_status == 'Paid' %}selected{% endif %}>Paid</option>

@@ -1,14 +1,54 @@
 import csv
+import hmac
 import io
 import os
+import re
+import secrets
 import sqlite3
+from functools import wraps
 from datetime import date
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, send_file, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-this-secret-for-local-development")
+app.secret_key = os.environ.get("SECRET_KEY", "local-only-change-this-secret-before-deploying")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true",
+    PERMANENT_SESSION_LIFETIME=60 * 60 * 8,  # 8 hours
+)
+def csrf_token():
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": csrf_token}
+
+
+@app.before_request
+def protect_post_requests_with_csrf():
+    if request.method == "POST":
+        submitted = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not submitted or not hmac.compare_digest(submitted, expected):
+            abort(400, description="Invalid or missing security token. Refresh the page and try again.")
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped_view(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped_view
 
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_DIR = BASE_DIR / "instance"
@@ -26,6 +66,14 @@ def get_db():
 def init_db():
     with get_db() as db:
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS patients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,
@@ -60,7 +108,81 @@ def init_db():
         db.commit()
 
 
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if len(name) < 2 or len(name) > 80:
+            flash("Name must be between 2 and 80 characters.", "error")
+        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email) or len(email) > 254:
+            flash("Enter a valid email address.", "error")
+        elif len(password) < 8 or len(password) > 128:
+            flash("Password must be 8 to 128 characters long.", "error")
+        elif password != confirm_password:
+            flash("Passwords do not match.", "error")
+        else:
+            try:
+                with get_db() as db:
+                    db.execute(
+                        "INSERT INTO users (name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+                        (name, email, generate_password_hash(password), date.today().isoformat()),
+                    )
+                    db.commit()
+                flash("Account created. Please log in.", "success")
+                return redirect(url_for("login"))
+            except sqlite3.IntegrityError:
+                flash("An account with that email already exists. Please log in.", "error")
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        with get_db() as db:
+            user = db.execute(
+                "SELECT id, name, email, password_hash FROM users WHERE email = ? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+
+        if user is None or not check_password_hash(user["password_hash"], password):
+            flash("Email or password is incorrect.", "error")
+        else:
+            session.clear()
+            session.permanent = True
+            session["user_id"] = user["id"]
+            session["user_name"] = user["name"]
+            session["user_email"] = user["email"]
+            next_url = request.args.get("next", "")
+            if next_url.startswith("/") and not next_url.startswith("//"):
+                return redirect(next_url)
+            return redirect(url_for("dashboard"))
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+@login_required
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def dashboard():
     search = request.args.get("q", "").strip()
     edit_id = request.args.get("edit", type=int)
@@ -121,6 +243,7 @@ def dashboard():
 
 
 @app.route("/patients/save", methods=["POST"])
+@login_required
 def save_patient():
     patient_id = request.form.get("patient_id", "").strip()
     full_name = request.form.get("full_name", "").strip()
@@ -162,6 +285,7 @@ def save_patient():
 
 
 @app.route("/patients/<int:patient_id>/delete", methods=["POST"])
+@login_required
 def delete_patient(patient_id):
     with get_db() as db:
         db.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
@@ -171,6 +295,7 @@ def delete_patient(patient_id):
 
 
 @app.route("/prescriptions/add", methods=["POST"])
+@login_required
 def add_prescription():
     patient_id = request.form.get("patient_id", type=int)
     diagnosis = request.form.get("diagnosis", "").strip()
@@ -197,6 +322,7 @@ def add_prescription():
 
 
 @app.route("/billing/add", methods=["POST"])
+@login_required
 def add_bill():
     patient_id = request.form.get("patient_id", type=int)
     description = request.form.get("description", "").strip()
@@ -234,6 +360,7 @@ def add_bill():
 
 
 @app.route("/bills/<int:bill_id>/status", methods=["POST"])
+@login_required
 def update_bill_status(bill_id):
     status = request.form.get("payment_status", "Pending")
     if status not in ("Paid", "Pending"):
@@ -246,6 +373,7 @@ def update_bill_status(bill_id):
 
 
 @app.route("/export/patients.csv")
+@login_required
 def export_patients():
     output = io.StringIO()
     writer = csv.writer(output)

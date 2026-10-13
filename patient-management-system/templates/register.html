@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create account | CarePoint</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <a class="brand auth-brand" href="{{ url_for('login') }}"><span class="brand-mark">✚</span><span>CarePoint<small>CLINIC MANAGEMENT</small></span></a>
+    <section class="auth-card">
+      <div class="auth-icon">＋</div>
+      <div class="eyebrow">GET STARTED</div>
+      <h1>Create your account</h1>
+      <p class="auth-subtitle">Register to access your CarePoint workspace.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}<div class="flash-stack">{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+      {% endwith %}
+      <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Full name<input type="text" name="name" required minlength="2" maxlength="80" autocomplete="name" placeholder="Your name" value="{{ request.form.get('name', '') }}"></label>
+        <label>Email address<input type="email" name="email" required maxlength="254" autocomplete="email" placeholder="you@example.com" value="{{ request.form.get('email', '') }}"></label>
+        <label>Password <span class="label-hint">At least 8 characters</span><input type="password" name="password" required minlength="8" maxlength="128" autocomplete="new-password" placeholder="Create a strong password"></label>
+        <label>Confirm password<input type="password" name="confirm_password" required minlength="8" maxlength="128" autocomplete="new-password" placeholder="Enter password again"></label>
+        <button class="button primary auth-submit" type="submit">Create account <span>→</span></button>
+      </form>
+      <p class="auth-switch">Already registered? <a href="{{ url_for('login') }}">Sign in</a></p>
+    </section>
+    <p class="auth-footnote">Educational demo only · Use fictional patient data</p>
+  </main>
+</body>
+</html>

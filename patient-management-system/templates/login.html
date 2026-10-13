@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in | CarePoint</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <a class="brand auth-brand" href="{{ url_for('login') }}"><span class="brand-mark">✚</span><span>CarePoint<small>CLINIC MANAGEMENT</small></span></a>
+    <section class="auth-card">
+      <div class="auth-icon">✚</div>
+      <div class="eyebrow">WELCOME BACK</div>
+      <h1>Sign in to CarePoint</h1>
+      <p class="auth-subtitle">Use your registered email and password to continue.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}<div class="flash-stack">{% for category, message in messages %}<div class="flash {{ category }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+      {% endwith %}
+      <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Email address<input type="email" name="email" required maxlength="254" autocomplete="email" placeholder="you@example.com" value="{{ request.form.get('email', '') }}"></label>
+        <label>Password<input type="password" name="password" required maxlength="128" autocomplete="current-password" placeholder="Enter your password"></label>
+        <button class="button primary auth-submit" type="submit">Sign in <span>→</span></button>
+      </form>
+      <p class="auth-switch">New to CarePoint? <a href="{{ url_for('register') }}">Create an account</a></p>
+    </section>
+    <p class="auth-footnote">Educational demo only · Use fictional patient data</p>
+  </main>
+</body>
+</html>
