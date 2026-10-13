@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CarePoint | Patient Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <span class="brand-mark">✚</span><span>CarePoint<small>CLINIC MANAGEMENT</small></span>
+    </a>
+    <div class="nav-label">WORKSPACE</div>
+    <nav class="nav">
+      <a href="#overview" class="nav-link active"><span>▦</span> Overview</a>
+      <a href="#patients" class="nav-link"><span>♙</span> Patients</a>
+      <a href="#prescriptions" class="nav-link"><span>▤</span> Prescriptions</a>
+      <a href="#billing" class="nav-link"><span>＄</span> Billing</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="secure-icon">✓</div>
+      <strong>Demo workspace</strong>
+      <p>Use fictional data only. This demo is not intended for real medical records.</p>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <div class="mobile-brand">✚ CarePoint</div>
+      <div class="breadcrumb">Workspace <span>/</span> <strong>Overview</strong></div>
+      <div class="topbar-right"><span class="online-dot"></span> System ready <div class="avatar">CP</div></div>
+    </header>
+
+    <section class="page-heading" id="overview">
+      <div>
+        <div class="eyebrow">CLINIC WORKSPACE</div>
+        <h1>Good day, Administrator <span>✦</span></h1>
+        <p>Manage patient records, prescriptions and billing in one place.</p>
+      </div>
+      <a class="button primary" href="#patient-form">＋ Register patient</a>
+    </section>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <div class="stat-top"><span>Total patients</span><span class="stat-icon blue">♙</span></div>
+        <div class="stat-number">{{ totals.patients }}</div><div class="stat-foot">Registered records</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-top"><span>Prescriptions</span><span class="stat-icon violet">▤</span></div>
+        <div class="stat-number">{{ totals.prescriptions }}</div><div class="stat-foot">Saved prescription records</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-top"><span>Total bills</span><span class="stat-icon amber">＄</span></div>
+        <div class="stat-number">{{ totals.bills }}</div><div class="stat-foot">Created billing records</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-top"><span>Pending bills</span><span class="stat-icon rose">◷</span></div>
+        <div class="stat-number">{{ totals.pending }}</div><div class="stat-foot">Awaiting payment</div>
+      </article>
+    </section>
+
+    <section class="panel" id="patients">
+      <div class="panel-heading">
+        <div><div class="eyebrow">PATIENT DIRECTORY</div><h2>Patient records</h2><p>Search and maintain patient information.</p></div>
+        <a class="button secondary" href="{{ url_for('export_patients') }}">⇩ Export CSV</a>
+      </div>
+
+      <form class="search-form" action="{{ url_for('dashboard') }}#patients" method="get">
+        <span class="search-symbol">⌕</span>
+        <input type="search" name="q" value="{{ search }}" placeholder="Search by name, phone or email..." aria-label="Search patients">
+        <button class="button dark" type="submit">Search</button>
+        {% if search %}<a class="button secondary" href="{{ url_for('dashboard') }}#patients">Clear</a>{% endif %}
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>PATIENT</th><th>CONTACT</th><th>AGE / GENDER</th><th>REGISTERED</th><th>ACTION</th></tr></thead>
+          <tbody>
+          {% for patient in patients %}
+            <tr>
+              <td><div class="patient-cell"><div class="patient-avatar">{{ patient.full_name[:1]|upper }}</div><div><strong>{{ patient.full_name }}</strong><small>Patient #{{ "%04d"|format(patient.id) }}</small></div></div></td>
+              <td><strong class="normal-weight">{{ patient.phone }}</strong><small>{{ patient.email or 'No email added' }}</small></td>
+              <td>{{ patient.age }} yrs <span class="muted">/ {{ patient.gender }}</span></td>
+              <td>{{ patient.created_at }}</td>
+              <td><div class="actions"><a class="action-link" href="{{ url_for('dashboard', edit=patient.id) }}#patient-form" title="Edit patient">Edit</a>
+                <form action="{{ url_for('delete_patient', patient_id=patient.id) }}" method="post" class="inline-form delete-form">
+                  <button class="action-link danger-link" type="submit">Delete</button>
+                </form></div></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5"><div class="empty-state"><span>♙</span><strong>No patient records found</strong><p>Register a patient or try a different search.</p></div></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="patient-form">
+      <div class="panel-heading">
+        <div><div class="eyebrow">PATIENT DETAILS</div><h2>{{ 'Update patient' if edit_patient else 'Register a patient' }}</h2><p>Fields marked with * are required.</p></div>
+        {% if edit_patient %}<a class="button secondary" href="{{ url_for('dashboard') }}#patient-form">Cancel edit</a>{% endif %}
+      </div>
+      <form action="{{ url_for('save_patient') }}" method="post" class="form-grid">
+        <input type="hidden" name="patient_id" value="{{ edit_patient.id if edit_patient else '' }}">
+        <label>Full name *<input name="full_name" required maxlength="100" placeholder="e.g. Arun Kumar" value="{{ edit_patient.full_name if edit_patient else '' }}"></label>
+        <label>Age *<input name="age" type="number" min="0" max="120" required placeholder="e.g. 28" value="{{ edit_patient.age if edit_patient else '' }}"></label>
+        <label>Gender *
+          <select name="gender" required>
+            <option value="">Select gender</option>
+            {% for g in ['Female', 'Male', 'Other', 'Prefer not to say'] %}
+              <option value="{{ g }}" {% if edit_patient and edit_patient.gender == g %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Phone number *<input name="phone" required maxlength="25" placeholder="Phone number" value="{{ edit_patient.phone if edit_patient else '' }}"></label>
+        <label>Email address<input name="email" type="email" maxlength="120" placeholder="name@example.com" value="{{ edit_patient.email if edit_patient else '' }}"></label>
+        <label class="span-two">Address<textarea name="address" rows="2" maxlength="300" placeholder="Street, city">{{ edit_patient.address if edit_patient else '' }}</textarea></label>
+        <div class="form-actions span-two"><button class="button primary" type="submit">{{ 'Save changes' if edit_patient else '＋ Add patient' }}</button></div>
+      </form>
+    </section>
+
+    <section class="two-column">
+      <section class="panel" id="prescriptions">
+        <div class="panel-heading"><div><div class="eyebrow">CLINICAL NOTES</div><h2>Prescriptions</h2><p>Record demo prescription details.</p></div></div>
+        {% if patient_options %}
+        <form action="{{ url_for('add_prescription') }}" method="post" class="stack-form">
+          <label>Patient *
+            <select name="patient_id" required><option value="">Choose patient</option>{% for p in patient_options %}<option value="{{ p.id }}">{{ p.full_name }}</option>{% endfor %}</select>
+          </label>
+          <label>Diagnosis / reason *<input name="diagnosis" required maxlength="200" placeholder="Diagnosis or visit reason"></label>
+          <label>Medicines *<textarea name="medicines" required rows="2" placeholder="Medicine details as provided by a qualified clinician"></textarea></label>
+          <label>Doctor notes<textarea name="doctor_notes" rows="2" placeholder="Optional notes"></textarea></label>
+          <button class="button primary" type="submit">Save prescription</button>
+        </form>
+        {% else %}<div class="hint-box">Register a patient first to add a prescription.</div>{% endif %}
+        <div class="mini-list">
+          {% for item in prescriptions %}
+          <div class="mini-item"><div class="mini-icon violet">Rx</div><div class="mini-body"><strong>{{ item.patient_name }}</strong><p>{{ item.diagnosis }}</p><small>{{ item.created_at }} · {{ item.medicines }}</small></div></div>
+          {% else %}<p class="muted empty-inline">No prescriptions yet.</p>{% endfor %}
+        </div>
+      </section>
+
+      <section class="panel" id="billing">
+        <div class="panel-heading"><div><div class="eyebrow">PAYMENTS</div><h2>Billing</h2><p>Create bills and track status.</p></div></div>
+        {% if patient_options %}
+        <form action="{{ url_for('add_bill') }}" method="post" class="stack-form">
+          <label>Patient *
+            <select name="patient_id" required><option value="">Choose patient</option>{% for p in patient_options %}<option value="{{ p.id }}">{{ p.full_name }}</option>{% endfor %}</select>
+          </label>
+          <label>Bill description *<input name="description" required maxlength="150" placeholder="e.g. Consultation fee"></label>
+          <label>Amount (₹) *<input name="amount" type="number" min="0" max="100000000" step="0.01" required placeholder="0.00"></label>
+          <label>Payment status<select name="payment_status"><option>Pending</option><option>Paid</option></select></label>
+          <button class="button primary" type="submit">＋ Create bill</button>
+        </form>
+        {% else %}<div class="hint-box">Register a patient first to create a bill.</div>{% endif %}
+        <div class="mini-list">
+          {% for bill in bills %}
+          <div class="mini-item"><div class="mini-icon amber">₹</div><div class="mini-body"><strong>{{ bill.patient_name }} <span class="bill-amount">₹{{ '%.2f'|format(bill.amount) }}</span></strong><p>{{ bill.description }}</p><small>{{ bill.created_at }}</small>
+            <form action="{{ url_for('update_bill_status', bill_id=bill.id) }}" method="post" class="status-form">
+              <select name="payment_status" aria-label="Payment status" onchange="this.form.submit()">
+                <option value="Pending" {% if bill.payment_status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Paid" {% if bill.payment_status == 'Paid' %}selected{% endif %}>Paid</option>
+              </select>
+            </form>
+          </div></div>
+          {% else %}<p class="muted empty-inline">No bills yet.</p>{% endfor %}
+        </div>
+      </section>
+    </section>
+    <footer>CarePoint Demo · Built with Flask, SQLite, HTML, CSS & JavaScript <span>For educational use only</span></footer>
+  </main>
+</div>
+</body>
+</html>
